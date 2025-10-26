@@ -4,8 +4,8 @@
  */
 
 #define _POSIX_C_SOURCE 200809L  // For usleep
-#include "soc_core.h"
 #include <unistd.h>  // For usleep (POSIX)
+#include "soc_core.h"
 
 /* ============================================================================
  * TEST DATA GENERATION
