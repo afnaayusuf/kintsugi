@@ -79,7 +79,8 @@ void rpu_monitor_sensor_health(RPUCore* rpu, SensorChannel* channel, float value
 
 void sensor_channel_init(SensorChannel* channel, uint32_t id, const char* name) {
     channel->channel_id = id;
-    strncpy(channel->name, name, sizeof(channel->name) - 1);
+    /* Use snprintf to safely copy and NUL-terminate without truncation warnings */
+    snprintf(channel->name, sizeof(channel->name), "%s", name);
     channel->state = CHANNEL_ON;
     channel->health_score = 1.0f;
     channel->stagnation_counter = 0;
@@ -281,6 +282,7 @@ void cloud_sync_handle_reconnect(BlackBoxSoC* soc) {
 bool apu_request_controller_permission(APUCore* apu) {
     // Simulate asking for permission from the pilot/controller
     // In a real system, this would involve a more complex interaction
+    (void)apu; // currently unused - keep signature for future use
     printf("APU: Requesting controller permission for data transfer...\n");
     printf("Controller: Permission GRANTED.\n");
     return true;
