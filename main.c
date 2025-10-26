@@ -3,7 +3,9 @@
  * Complete test suite and demonstration code
  */
 
+#define _POSIX_C_SOURCE 200809L  // For usleep
 #include "soc_core.h"
+#include <unistd.h>  // For usleep (POSIX)
 
 /* ============================================================================
  * TEST DATA GENERATION
@@ -225,6 +227,50 @@ void verify_output_files() {
 }
 
 /* ============================================================================
+ * INTERACTIVE DASHBOARD MODE
+ * ============================================================================ */
+
+void run_interactive_mode(BlackBoxSoC* soc) {
+    printf("\n");
+    printf("============================================================\n");
+    printf("     BlackBox DPU - Interactive Dashboard Mode             \n");
+    printf("============================================================\n");
+    printf("Commands: add <name>, list, help, quit\n");
+    printf("(Live sensor display updates automatically)\n");
+    printf("\n");
+    
+    // Initial display
+    soc_display_channels(soc);
+    printf("\n> ");
+    fflush(stdout);
+    
+    while (1) {
+        // Poll for user input (non-blocking on POSIX, blocking on Windows)
+        if (soc_poll_input(soc)) {
+            // Re-display after processing command
+            soc_display_channels(soc);
+            
+            // Check if user issued quit
+            // For now, just continue (user can Ctrl-C)
+            printf("\n> ");
+            fflush(stdout);
+        }
+        
+        // Simulate some background activity (optional: update sensor health)
+        usleep(100000); // 100ms sleep to avoid busy loop
+        
+        // Refresh display periodically
+        static int refresh_counter = 0;
+        if (++refresh_counter >= 10) { // Refresh every ~1 second
+            soc_display_channels(soc);
+            printf("\n> ");
+            fflush(stdout);
+            refresh_counter = 0;
+        }
+    }
+}
+
+/* ============================================================================
  * MAIN TESTBENCH ENTRY POINT
  * ============================================================================ */
 
@@ -234,44 +280,60 @@ int main(int argc, char** argv) {
     // Parse command line options
     bool verbose = true;
     bool run_all_tests = true;
+    bool interactive_mode = false;
     
     if (argc > 1) {
         if (strcmp(argv[1], "-q") == 0 || strcmp(argv[1], "--quiet") == 0) {
             verbose = false;
+        } else if (strcmp(argv[1], "-i") == 0 || strcmp(argv[1], "--interactive") == 0) {
+            interactive_mode = true;
+            run_all_tests = false;
+        } else if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
+            printf("Usage: %s [options]\n", argv[0]);
+            printf("Options:\n");
+            printf("  -i, --interactive  Run interactive dashboard mode\n");
+            printf("  -q, --quiet        Run tests in quiet mode\n");
+            printf("  -h, --help         Show this help message\n");
+            return 0;
         }
     }
     
     // Initialize the SoC
     BlackBoxSoC soc;
-    blackbox_soc_init(&soc, verbose);
+    blackbox_soc_init(&soc, verbose, interactive_mode);
     
-    // Run test suite
-    printf("\n");
-    printf("Starting Virtual Platform Test Suite...\n");
-    printf("========================================\n");
-    
-    if (run_all_tests) {
-        // Test 1: Single block processing
-        run_single_block_test(&soc);
+    // Choose mode: interactive or test suite
+    if (interactive_mode) {
+        run_interactive_mode(&soc);
+    } else {
+        // Run test suite
+        printf("\n");
+        printf("Starting Virtual Platform Test Suite...\n");
+        printf("========================================\n");
         
-        // Test 2: Streaming data
-        run_streaming_test(&soc);
+        if (run_all_tests) {
+            // Test 1: Single block processing
+            run_single_block_test(&soc);
+            
+            // Test 2: Streaming data
+            run_streaming_test(&soc);
+            
+            // Test 3: Performance benchmark
+            run_performance_benchmark(&soc);
+            
+            // Test 4: Architecture validation
+            run_architecture_validation(&soc);
+            
+            // Test 5: Cloud transfer validation
+            run_cloud_transfer_test(&soc);
+        }
         
-        // Test 3: Performance benchmark
-        run_performance_benchmark(&soc);
+        // Print final statistics
+        print_statistics(&soc);
         
-        // Test 4: Architecture validation
-        run_architecture_validation(&soc);
-        
-        // Test 5: Cloud transfer validation
-        run_cloud_transfer_test(&soc);
+        // Verify output files
+        verify_output_files();
     }
-    
-    // Print final statistics
-    print_statistics(&soc);
-    
-    // Verify output files
-    verify_output_files();
     
     // Cleanup
     blackbox_soc_cleanup(&soc);

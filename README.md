@@ -4,6 +4,10 @@
 
 This project implements a **complete C-model virtual platform** for a BlackBox DPU (Data Processing Unit) inspired preprocessing driver. It demonstrates a heterogeneous SoC architecture with hardware acceleration, multi-channel DMA, and dual-path logging capabilities.
 
+**Two operational modes:**
+1. **Test Suite Mode** (default): Runs automated tests validating the full architecture
+2. **Interactive Dashboard Mode** (`--interactive`): Live sensor channel display with command input
+
 ## Architecture Highlights
 
 ### Core Features
@@ -112,13 +116,31 @@ This will compile all modules and create the executable `blackbox_dpu`.
 
 ### Running
 
+**Test Suite Mode (default):**
 ```bash
 # Run with verbose output (default)
 ./blackbox_dpu
 
 # Run quietly (less output)
 ./blackbox_dpu -q
+
+# Show help
+./blackbox_dpu --help
 ```
+
+**Interactive Dashboard Mode:**
+```bash
+# Launch live sensor display with command prompt
+./blackbox_dpu --interactive
+# or
+./blackbox_dpu -i
+```
+
+In interactive mode you'll see:
+- Live updating display of 4 sensor channels (health, state)
+- Command prompt at the bottom
+- Available commands: `add <name>`, `list`, `help`
+- Press Ctrl-C to exit
 
 ## Test Suite
 

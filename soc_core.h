@@ -19,7 +19,7 @@
  * SOC CORE FUNCTIONS
  * ============================================================================ */
 
-void blackbox_soc_init(BlackBoxSoC* soc, bool verbose);
+void blackbox_soc_init(BlackBoxSoC* soc, bool verbose, bool interactive);
 void blackbox_soc_cleanup(BlackBoxSoC* soc);
 void blackbox_process_data_block(BlackBoxSoC* soc, uint8_t* input_data, uint32_t data_size);
 void print_statistics(BlackBoxSoC* soc);
@@ -47,7 +47,7 @@ void soc_display_channels(BlackBoxSoC* soc);
 // Poll for interactive input (non-blocking). On POSIX this will check stdin
 // and call soc_handle_command when a full line is received. On Windows this is
 // a no-op.
-void soc_poll_input(BlackBoxSoC* soc);
+bool soc_poll_input(BlackBoxSoC* soc);
 void soc_handle_command(BlackBoxSoC* soc, const char* cmd);
 
 /* ============================================================================

@@ -138,6 +138,11 @@ void sensor_ensure_minimum(BlackBoxSoC* soc, uint32_t min_count) {
 // This prints a fixed block of lines and overwrites them on subsequent calls.
 static int g_last_display_lines = 0;
 void soc_display_channels(BlackBoxSoC* soc) {
+    // Only do in-place updates if interactive_display is enabled
+    if (!soc->interactive_display) {
+        return; // Silent return in test mode
+    }
+    
     // Count lines: one header + one per channel
     int lines = 2 + (int)soc->num_channels; // header + blank + channels
 
@@ -168,7 +173,8 @@ void soc_display_channels(BlackBoxSoC* soc) {
 
 // Simple POSIX non-blocking input poll. Reads a line if available and
 // dispatches to soc_handle_command(). On Windows this function does nothing.
-void soc_poll_input(BlackBoxSoC* soc) {
+// Returns true if input was processed.
+bool soc_poll_input(BlackBoxSoC* soc) {
 #ifdef __unix__
     struct timeval tv = {0, 0};
     fd_set readfds;
@@ -181,11 +187,13 @@ void soc_poll_input(BlackBoxSoC* soc) {
             // strip newline
             buf[strcspn(buf, "\r\n")] = 0;
             soc_handle_command(soc, buf);
+            return true;
         }
     }
 #else
     (void)soc;
 #endif
+    return false;
 }
 
 // Default command handler — records the command as an event marker and echoes it.
@@ -360,9 +368,10 @@ void handle_cloud_transfer_request(BlackBoxSoC* soc, uint64_t timestamp, const c
  * SOC INITIALIZATION
  * ============================================================================ */
 
-void blackbox_soc_init(BlackBoxSoC* soc, bool verbose) {
+void blackbox_soc_init(BlackBoxSoC* soc, bool verbose, bool interactive) {
     memset(soc, 0, sizeof(BlackBoxSoC));
     soc->verbose = verbose;
+    soc->interactive_display = interactive;
     
     // Initialize subsystems
     memory_init(&soc->memory);
@@ -413,10 +422,12 @@ void blackbox_soc_init(BlackBoxSoC* soc, bool verbose) {
     printf("\nSensor Channels: %u configured\n", soc->num_channels);
     printf("Security Model: Local-First (remote config %s)\n\n",
         soc->apu.allow_remote_config ? "ENABLED" : "DISABLED");
-    // Print initial live display for channels (will be overwritten in-place)
-    soc_display_channels(soc);
+    
+    // Only show initial display in interactive mode
+    if (soc->interactive_display) {
+        soc_display_channels(soc);
+    }
 }
-
 void blackbox_soc_cleanup(BlackBoxSoC* soc) {
     memory_cleanup(&soc->memory);
     if (soc->nvme.storage_file) {

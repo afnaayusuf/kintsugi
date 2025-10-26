@@ -317,6 +317,7 @@ struct BlackBoxSoC {
     
     // Configuration
     bool verbose;
+    bool interactive_display;  // Enable in-place ANSI display updates
 };
 
 #endif // BLACKBOX_COMMON_H
