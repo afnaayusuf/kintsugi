@@ -3,8 +3,6 @@
  * Complete test suite and demonstration code
  */
 
-#define _POSIX_C_SOURCE 200809L  // For usleep
-#include <unistd.h>  // For usleep (POSIX)
 #include "soc_core.h"
 
 /* ============================================================================

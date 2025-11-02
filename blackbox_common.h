@@ -14,6 +14,18 @@
 #include <time.h>
 
 /* ============================================================================
+ * CROSS-PLATFORM COMPATIBILITY MACROS
+ * ============================================================================ */
+#ifdef _WIN32
+    #include <windows.h>
+    // Windows compatibility: usleep(microseconds) -> Sleep(milliseconds)
+    #define usleep(us) Sleep((us) / 1000)
+    #define sleep(s) Sleep((s) * 1000)
+#else
+    #include <unistd.h>  // POSIX: usleep, sleep
+#endif
+
+/* ============================================================================
  * MEMORY MAP DEFINITIONS (From Section 4.1)
  * ============================================================================ */
 #define BOOT_ROM_BASE           0x00000000

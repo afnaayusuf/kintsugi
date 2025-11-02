@@ -1,9 +1,10 @@
 # BlackBox DPU Virtual Platform Makefile
-# Compilation configuration for modular architecture
+# Compilation configuration for modular architecture WITH REAL NETWORK!
 
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -O2
-LDFLAGS = 
+# Add libcurl for HTTP requests (on Unix/Pi only)
+LDFLAGS = $(shell if [ "$$(uname)" != "MINGW*" ]; then echo "-lcurl"; fi)
 TARGET = blackbox_dpu
 
 # Source files
@@ -15,6 +16,7 @@ SRCS = event_queue.c \
        ethernet_mac.c \
        bus_interconnect.c \
        soc_core.c \
+       network_client.c \
        main.c
 
 # Object files
@@ -28,6 +30,8 @@ HEADERS = blackbox_common.h \
           dma_engine.h \
           nvme_controller.h \
           ethernet_mac.h \
+          network_client.h \
+          network_config.h \
           bus_interconnect.h \
           soc_core.h
 

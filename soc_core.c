@@ -4,11 +4,18 @@
  */
 
 #include "soc_core.h"
-#ifdef __unix__
-#include <termios.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/select.h>
+#include "network_client.h"
+
+// Platform-specific terminal handling
+#if defined(__unix__) || defined(__APPLE__)
+    #include <termios.h>
+    #include <unistd.h>
+    #include <fcntl.h>
+    #include <sys/select.h>
+    #define HAS_POSIX_TERMINAL 1
+#elif defined(_WIN32)
+    #include <conio.h>  // Windows: _kbhit(), _getch()
+    #define HAS_WINDOWS_TERMINAL 1
 #endif
 
 /* ============================================================================
@@ -171,11 +178,11 @@ void soc_display_channels(BlackBoxSoC* soc) {
     g_last_display_lines = lines;
 }
 
-// Simple POSIX non-blocking input poll. Reads a line if available and
-// dispatches to soc_handle_command(). On Windows this function does nothing.
-// Returns true if input was processed.
+// Cross-platform non-blocking input poll. Reads a line if available and
+// dispatches to soc_handle_command(). Returns true if input was processed.
 bool soc_poll_input(BlackBoxSoC* soc) {
-#ifdef __unix__
+#ifdef HAS_POSIX_TERMINAL
+    // POSIX: use select() for non-blocking input
     struct timeval tv = {0, 0};
     fd_set readfds;
     FD_ZERO(&readfds);
@@ -188,6 +195,30 @@ bool soc_poll_input(BlackBoxSoC* soc) {
             buf[strcspn(buf, "\r\n")] = 0;
             soc_handle_command(soc, buf);
             return true;
+        }
+    }
+#elif defined(HAS_WINDOWS_TERMINAL)
+    // Windows: use _kbhit() and _getch() for console input
+    static char input_buffer[256];
+    static int buf_pos = 0;
+    
+    while (_kbhit()) {
+        int ch = _getch();
+        if (ch == '\r' || ch == '\n') {
+            input_buffer[buf_pos] = '\0';
+            if (buf_pos > 0) {
+                soc_handle_command(soc, input_buffer);
+                buf_pos = 0;
+                return true;
+            }
+        } else if (ch == '\b' && buf_pos > 0) {
+            buf_pos--;  // Backspace
+            printf("\b \b");
+            fflush(stdout);
+        } else if (buf_pos < 255 && ch >= 32 && ch <= 126) {
+            input_buffer[buf_pos++] = (char)ch;
+            putchar(ch);
+            fflush(stdout);
         }
     }
 #else
@@ -373,6 +404,11 @@ void blackbox_soc_init(BlackBoxSoC* soc, bool verbose, bool interactive) {
     soc->verbose = verbose;
     soc->interactive_display = interactive;
     
+    // Initialize network client for real cloud communication
+    if (!network_client_init()) {
+        fprintf(stderr, "Warning: Network client initialization failed\n");
+    }
+    
     // Initialize subsystems
     memory_init(&soc->memory);
     event_queue_init(&soc->event_queue);
@@ -429,6 +465,9 @@ void blackbox_soc_init(BlackBoxSoC* soc, bool verbose, bool interactive) {
     }
 }
 void blackbox_soc_cleanup(BlackBoxSoC* soc) {
+    // Cleanup network client
+    network_client_cleanup();
+    
     memory_cleanup(&soc->memory);
     if (soc->nvme.storage_file) {
         fclose(soc->nvme.storage_file);
