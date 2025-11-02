@@ -297,7 +297,7 @@ bool apu_request_controller_permission(APUCore* apu) {
 }
 
 bool read_marker_key(char* buffer, size_t len) {
-    FILE* f = fopen("marker.key", "r");
+    FILE* f = fopen(".marker.key", "r");
     if (!f) {
         return false;
     }
