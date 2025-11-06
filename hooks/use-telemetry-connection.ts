@@ -4,7 +4,7 @@ import { useEffect } from "react"
 import { useVehicleStore } from "@/lib/store"
 import { telemetryWS } from "@/lib/websocket"
 import { generateMockTelemetry } from "@/lib/mock-data"
-import { getStoredToken } from "@/lib/api"
+import { getStoredToken, fetchTelemetry } from "@/lib/api"
 
 export function useTelemetryConnection() {
   const selectedVehicleId = useVehicleStore((state) => state.selectedVehicleId)
@@ -17,10 +17,14 @@ export function useTelemetryConnection() {
     const token = getStoredToken()
     if (!token) return
 
+    console.log("[Telemetry] Token:", token.substring(0, 20) + "...")
+    console.log("[Telemetry] Selected Vehicle:", selectedVehicleId)
+
     // Check if using demo mode
     const isDemo = token.startsWith("demo_")
 
     if (isDemo) {
+      console.log("[Telemetry] Using MOCK DATA mode")
       // Use mock data for demo mode
       const interval = setInterval(() => {
         const mockData = generateMockTelemetry(selectedVehicleId)
@@ -30,32 +34,31 @@ export function useTelemetryConnection() {
       return () => clearInterval(interval)
     }
 
-    // Setup real WebSocket connection for production
-    const wsBaseUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000"
-    const wsUrl = `${wsBaseUrl}/ws/telemetry/${selectedVehicleId}`
+    console.log("[Telemetry] Using REAL DATA mode - polling API")
 
-    const setupConnection = async () => {
+    // Get update interval from settings (default 2 seconds)
+    const updateInterval = parseInt(localStorage.getItem("telemetry_update_interval") || "2000")
+    console.log("[Telemetry] Update interval:", updateInterval, "ms")
+
+    // Use API polling for real data (since WebSocket may not be working)
+    const pollTelemetry = async () => {
       try {
-        console.log("Connecting WebSocket to:", wsUrl)
-        await telemetryWS.connect({
-          url: wsUrl,
-          token,
-          vehicleId: selectedVehicleId,
-        })
-
-        telemetryWS.on("telemetry", (data) => {
-          console.log("Telemetry received:", data)
-          setTelemetry(data)
-        })
+        const data = await fetchTelemetry(selectedVehicleId, token)
+        console.log("[Telemetry] Received from API:", data)
+        if (data && data.telemetry) {
+          setTelemetry(data.telemetry)
+        }
       } catch (error) {
-        console.error("[v0] Failed to connect WebSocket:", error)
+        console.error("[Telemetry] Failed to fetch:", error)
       }
     }
 
-    setupConnection()
+    // Poll at configured interval
+    const interval = setInterval(pollTelemetry, updateInterval)
+    
+    // Fetch immediately
+    pollTelemetry()
 
-    return () => {
-      telemetryWS.disconnect()
-    }
+    return () => clearInterval(interval)
   }, [selectedVehicleId, isAuthenticated, setTelemetry])
 }

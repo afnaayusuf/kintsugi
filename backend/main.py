@@ -136,10 +136,31 @@ class DataStore:
         return self.data["users"].get(email)
 
     def get_vehicles(self) -> Dict[str, Any]:
+        # Update all vehicle statuses
+        for vehicle_id in self.data["vehicles"]:
+            telemetry_list = self.data["telemetry"].get(vehicle_id, [])
+            if telemetry_list:
+                last_update = datetime.fromisoformat(telemetry_list[-1]["timestamp"])
+                time_diff = (datetime.utcnow() - last_update).total_seconds()
+                self.data["vehicles"][vehicle_id]["status"] = "connected" if time_diff < 60 else "offline"
+                self.data["vehicles"][vehicle_id]["last_updated"] = telemetry_list[-1]["timestamp"]
+            else:
+                self.data["vehicles"][vehicle_id]["status"] = "offline"
         return self.data["vehicles"]
 
     def get_vehicle(self, vehicle_id: str):
-        return self.data["vehicles"].get(vehicle_id)
+        vehicle = self.data["vehicles"].get(vehicle_id)
+        if vehicle:
+            # Update status based on last telemetry
+            telemetry_list = self.data["telemetry"].get(vehicle_id, [])
+            if telemetry_list:
+                last_update = datetime.fromisoformat(telemetry_list[-1]["timestamp"])
+                time_diff = (datetime.utcnow() - last_update).total_seconds()
+                vehicle["status"] = "connected" if time_diff < 60 else "offline"
+                vehicle["last_updated"] = telemetry_list[-1]["timestamp"]
+            else:
+                vehicle["status"] = "offline"
+        return vehicle
 
     def add_telemetry(self, vehicle_id: str, telemetry: TelemetryData):
         if vehicle_id not in self.data["telemetry"]:
