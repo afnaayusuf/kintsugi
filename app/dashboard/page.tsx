@@ -2,9 +2,8 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { getStoredToken } from "@/lib/api"
+import { getStoredToken, fetchVehicles } from "@/lib/api"
 import { useVehicleStore } from "@/lib/store"
-import { mockVehicles } from "@/lib/mock-data"
 import { useTelemetryConnection } from "@/hooks/use-telemetry-connection"
 import { Sidebar } from "@/components/sidebar"
 import { TopNavigation } from "@/components/top-navigation"
@@ -29,12 +28,22 @@ export default function DashboardPage() {
       return
     }
 
-    if (!selectedVehicleId) {
-      setVehicles(mockVehicles)
-      if (mockVehicles.length > 0) {
-        selectVehicle(mockVehicles[0].id)
+    // Fetch vehicles from API
+    const loadVehicles = async () => {
+      try {
+        console.log("Fetching vehicles from API...")
+        const data = await fetchVehicles(token)
+        console.log("Vehicles received:", data)
+        setVehicles(data.vehicles.map((v: any) => ({ id: v.id, model: v.name || v.model, status: v.status })))
+        if (data.vehicles.length > 0 && !selectedVehicleId) {
+          selectVehicle(data.vehicles[0].id)
+        }
+      } catch (error) {
+        console.error("Failed to fetch vehicles:", error)
       }
     }
+
+    loadVehicles()
   }, [router, selectedVehicleId, setVehicles, selectVehicle])
 
   return (

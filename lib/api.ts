@@ -8,6 +8,8 @@ export async function apiCall<T>(endpoint: string, options: ApiOptions = {}): Pr
   const { token, ...fetchOptions } = options
   const url = `${API_BASE}${endpoint}`
 
+  console.log(`[API] Calling: ${url}`)
+
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...fetchOptions.headers,
@@ -21,6 +23,8 @@ export async function apiCall<T>(endpoint: string, options: ApiOptions = {}): Pr
     ...fetchOptions,
     headers,
   })
+
+  console.log(`[API] Response: ${response.status} ${response.statusText}`)
 
   if (!response.ok) {
     throw new Error(`API Error: ${response.status} ${response.statusText}`)

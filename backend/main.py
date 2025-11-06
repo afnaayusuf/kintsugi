@@ -16,7 +16,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 DATA_FILE = Path("data.json")
 
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000,http://172.20.10.3:3000,http://172.20.10.3:8000").split(",")
 
 # ==================== PYDANTIC MODELS ====================
 class LoginRequest(BaseModel):

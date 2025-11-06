@@ -24,15 +24,18 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await apiCall<{ token: string }>("/auth/login", {
+      console.log("[Login] Attempting login to backend...")
+      const response = await apiCall<{ access_token: string; token_type: string; user_id: string }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       })
 
-      setStoredToken(response.token)
+      console.log("[Login] Login successful, token received")
+      setStoredToken(response.access_token)
       setAuthenticated(true)
       router.push("/dashboard")
     } catch (err) {
+      console.error("[Login] Login failed:", err)
       setError(err instanceof Error ? err.message : "Login failed")
     } finally {
       setIsLoading(false)

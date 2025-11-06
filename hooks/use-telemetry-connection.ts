@@ -31,10 +31,12 @@ export function useTelemetryConnection() {
     }
 
     // Setup real WebSocket connection for production
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "wss://api.hybrid-drive.io/ws/telemetry"
+    const wsBaseUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000"
+    const wsUrl = `${wsBaseUrl}/ws/telemetry/${selectedVehicleId}`
 
     const setupConnection = async () => {
       try {
+        console.log("Connecting WebSocket to:", wsUrl)
         await telemetryWS.connect({
           url: wsUrl,
           token,
@@ -42,6 +44,7 @@ export function useTelemetryConnection() {
         })
 
         telemetryWS.on("telemetry", (data) => {
+          console.log("Telemetry received:", data)
           setTelemetry(data)
         })
       } catch (error) {
