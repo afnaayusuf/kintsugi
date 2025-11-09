@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, Depends, HTTPException, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import asyncio
 import json
 from datetime import datetime, timedelta
@@ -342,16 +343,6 @@ class DataStore:
 store = DataStore()
 simulators: Dict[str, VehicleSimulator] = {}
 
-app = FastAPI(title="Kintsugi - Vehicle Telemetry Backend", version="1.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # ==================== BACKGROUND TASK ====================
 async def generate_telemetry():
     """Background task to continuously generate telemetry data"""
@@ -377,11 +368,27 @@ async def generate_telemetry():
             print(f"[SIMULATOR] ❌ Error: {e}")
             await asyncio.sleep(1)
 
-@app.on_event("startup")
-async def startup_event():
-    """Start background tasks on server startup"""
-    asyncio.create_task(generate_telemetry())
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown"""
+    # Startup
+    print("[SERVER] 🚀 Starting up...")
+    task = asyncio.create_task(generate_telemetry())
     print("[SERVER] ✅ Backend started successfully")
+    yield
+    # Shutdown
+    task.cancel()
+    print("[SERVER] 👋 Shutting down...")
+
+app = FastAPI(title="Kintsugi - Vehicle Telemetry Backend", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ==================== JWT UTILITIES ====================
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
