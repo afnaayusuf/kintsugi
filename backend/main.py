@@ -516,6 +516,9 @@ async def generate_telemetry():
         simulators[vehicle_id] = VehicleSimulator(vehicle_id)
         print(f"[SIMULATOR] ✅ Created simulator for {vehicle_id}")
     
+    # Counter for periodic logging
+    log_counter = 0
+    
     while True:
         try:
             for vehicle_id, simulator in simulators.items():
@@ -525,10 +528,23 @@ async def generate_telemetry():
                 # Store telemetry
                 telemetry = TelemetryData(**telemetry_data)
                 store.add_telemetry(vehicle_id, telemetry)
+                
+                # Log telemetry every 5 seconds for BENYON_001
+                if vehicle_id == "BENYON_001" and log_counter % 5 == 0:
+                    print(f"\n[TELEMETRY] {vehicle_id} - Mode: {simulator.mode}")
+                    print(f"  📊 Speed: {telemetry_data['speed']} km/h | RPM: {telemetry_data['rpm']} | Gear: {telemetry_data['gear']}")
+                    print(f"  🎮 Throttle: {telemetry_data['throttle_pct']}% | Brake: {telemetry_data['brake_pct']}%")
+                    print(f"  🌡️  Engine: {telemetry_data['engine_temp']}°C | Battery: {telemetry_data['battery_voltage']}V")
+                    print(f"  ⛽ Fuel: {telemetry_data['fuel_level']}% | Traction: {telemetry_data['traction_control']}")
+                    if telemetry_data['diagnostics']:
+                        print(f"  ⚠️  Diagnostics: {', '.join(telemetry_data['diagnostics'])}")
             
+            log_counter += 1
             await asyncio.sleep(1)  # Update every second
         except Exception as e:
             print(f"[SIMULATOR] ❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
             await asyncio.sleep(1)
 
 @asynccontextmanager
