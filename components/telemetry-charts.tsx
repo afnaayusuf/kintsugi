@@ -18,6 +18,7 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  ComposedChart,
 } from "recharts"
 
 interface DataPoint {
@@ -102,6 +103,12 @@ export function TelemetryCharts() {
       throttle: Math.round(currentTelemetry.telemetry.throttle_pct),
       brake: Math.round(currentTelemetry.telemetry.brake_pct),
     }
+
+    console.log("[TelemetryCharts] New point created:", {
+      throttle: newPoint.throttle,
+      brake: newPoint.brake,
+      timestamp: newPoint.timestamp
+    })
 
     setChartData((prev) => {
       const updated = [...prev, newPoint]
@@ -298,20 +305,33 @@ export function TelemetryCharts() {
 
         <Card className="border border-border">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Throttle & Brake</CardTitle>
+            <CardTitle className="text-base flex items-center justify-between">
+              Throttle & Brake
+              {chartData.length > 0 && (
+                <div className="text-xs text-muted-foreground font-normal">
+                  Last: T={chartData[chartData.length - 1]?.throttle}% B={chartData[chartData.length - 1]?.brake}%
+                </div>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0 0)" />
-                <XAxis dataKey="timestamp" stroke="oklch(0.70 0 0)" fontSize={12} />
-                <YAxis stroke="oklch(0.70 0 0)" fontSize={12} domain={[0, 100]} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ paddingTop: "10px" }} />
-                <Bar dataKey="throttle" fill="oklch(0.65 0.30 240)" name="Throttle (%)" minPointSize={2} />
-                <Bar dataKey="brake" fill="oklch(0.60 0.24 30)" name="Brake (%)" minPointSize={2} />
-              </BarChart>
-            </ResponsiveContainer>
+            {chartData.length === 0 ? (
+              <div className="h-[240px] flex items-center justify-center text-muted-foreground text-sm">
+                Waiting for data...
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0 0)" />
+                  <XAxis dataKey="timestamp" stroke="oklch(0.70 0 0)" fontSize={12} />
+                  <YAxis stroke="oklch(0.70 0 0)" fontSize={12} domain={[0, 100]} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ paddingTop: "10px" }} />
+                  <Bar dataKey="throttle" fill="oklch(0.65 0.30 240)" name="Throttle (%)" />
+                  <Bar dataKey="brake" fill="oklch(0.60 0.24 30)" name="Brake (%)" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
