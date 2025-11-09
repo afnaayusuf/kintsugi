@@ -271,6 +271,18 @@ class DataStore:
                     "status": "connected",
                     "battery_level": 92,
                     "last_updated": datetime.utcnow().isoformat()
+                },
+                "BENYON_001": {
+                    "id": "BENYON_001",
+                    "name": "Benyon Test Vehicle",
+                    "make": "Tesla",
+                    "model": "Model 3",
+                    "year": 2024,
+                    "vin": "5YJ3E1EB8MF123456",
+                    "license_plate": "BENYON01",
+                    "status": "connected",
+                    "battery_level": 88,
+                    "last_updated": datetime.utcnow().isoformat()
                 }
             },
             "telemetry": {}
