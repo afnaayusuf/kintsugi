@@ -195,24 +195,32 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 def verify_token(token: str) -> dict:
     try:
+        print(f"[AUTH] Verifying token: {token[:20]}...")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
+            print(f"[AUTH] ❌ Token missing 'sub' field")
             raise HTTPException(status_code=401, detail="Invalid token")
+        print(f"[AUTH] ✅ Token valid for: {email}")
         return payload
     except jwt.ExpiredSignatureError:
+        print(f"[AUTH] ❌ Token expired")
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        print(f"[AUTH] ❌ Invalid token: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
 def get_token_from_header(authorization: Optional[str] = Header(None)) -> Optional[str]:
     """Extract token from Authorization header"""
+    print(f"[AUTH] Authorization header: {authorization[:30] if authorization else 'None'}...")
     if not authorization:
         return None
     
     # Handle "Bearer <token>" format
     if authorization.startswith("Bearer "):
-        return authorization[7:]
+        token = authorization[7:]
+        print(f"[AUTH] Extracted token: {token[:20]}...")
+        return token
     
     return authorization
 
