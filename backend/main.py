@@ -289,13 +289,34 @@ class DataStore:
             "telemetry": {}
         }
         self.load_from_file()
+        
+        # Ensure BENYON_001 exists (in case old data.json doesn't have it)
+        if "BENYON_001" not in self.data["vehicles"]:
+            self.data["vehicles"]["BENYON_001"] = {
+                "id": "BENYON_001",
+                "name": "Benyon Test Vehicle",
+                "make": "Tesla",
+                "model": "Model 3",
+                "year": 2024,
+                "vin": "5YJ3E1EB8MF123456",
+                "license_plate": "BENYON01",
+                "status": "connected",
+                "battery_level": 88,
+                "last_updated": datetime.utcnow().isoformat()
+            }
+            self.save_to_file()
+            print("[STORAGE] ✅ Added BENYON_001 vehicle to database")
 
     def load_from_file(self):
         if DATA_FILE.exists():
             try:
                 with open(DATA_FILE, "r") as f:
-                    self.data = json.load(f)
-            except:
+                    loaded_data = json.load(f)
+                    # Merge loaded data with defaults
+                    self.data.update(loaded_data)
+                    print(f"[STORAGE] 📂 Loaded data from {DATA_FILE}")
+            except Exception as e:
+                print(f"[STORAGE] ⚠️ Error loading file: {e}")
                 pass
 
     def save_to_file(self):
