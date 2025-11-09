@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, Depends, HTTPException, status
+from fastapi import FastAPI, WebSocket, Depends, HTTPException, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import asyncio
@@ -10,7 +10,7 @@ import jwt
 from pathlib import Path
 import os
 import random
-import time
+import math
 
 # ==================== CONFIG ====================
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
@@ -18,7 +18,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 DATA_FILE = Path("data.json")
 
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000,http://172.20.10.3:3000,http://172.20.10.3:8000").split(",")
 
 # ==================== PYDANTIC MODELS ====================
 class LoginRequest(BaseModel):
@@ -68,131 +68,189 @@ class TelemetryUpdate(BaseModel):
     vehicle_id: str
     data: TelemetryData
 
-# ==================== VEHICLE SIMULATOR ====================
+# ==================== REALISTIC VEHICLE SIMULATOR ====================
 class VehicleSimulator:
-    """Realistic vehicle simulator with gradual changes"""
+    """Simulates realistic vehicle telemetry with gradual changes"""
+    
     def __init__(self, vehicle_id: str):
         self.vehicle_id = vehicle_id
-        self.speed = 0.0
-        self.rpm = 800
-        self.throttle_pct = 0.0
-        self.brake_pct = 0.0
+        # Current state
+        self.speed = 0.0  # km/h
+        self.rpm = 800  # idle RPM
+        self.throttle = 0.0
+        self.brake = 0.0
         self.gear = 1
-        self.engine_temp = 70.0
-        self.fuel_level = 100.0
+        self.fuel_level = 75.0
+        self.engine_temp = 70.0  # Celsius
         self.battery_voltage = 12.6
-        self.gps_lat = 37.7749
-        self.gps_lon = -122.4194
-        self.ambient_temp = 22.0
-        self.humidity = 45.0
-        self.mode = "idle"  # idle, accelerating, cruising, braking
-        self.last_update = time.time()
-        self.uptime_start = time.time()
+        self.odometer = random.uniform(5000, 50000)
         
-        print(f"[SIMULATOR] Created new simulator for {vehicle_id}")
-
-    def update(self):
+        # GPS starting position (different for each vehicle)
+        base_lat = 10.0053
+        base_lon = 76.3601
+        offset = hash(vehicle_id) % 100 / 10000.0
+        self.gps_lat = base_lat + offset
+        self.gps_lon = base_lon + offset
+        
+        # Environmental
+        self.ambient_temp = 28.0
+        self.humidity = 65.0
+        
+        # System
+        self.cpu_usage = 15.0
+        self.memory_usage = 45.0
+        self.uptime = 0
+        
+        # Driving mode: idle, accelerating, cruising, braking
+        self.mode = "idle"
+        self.mode_duration = 0
+        self.target_speed = 0
+        
+    def update(self, dt: float = 1.0):
         """Update vehicle state with realistic physics"""
-        current_time = time.time()
-        dt = current_time - self.last_update
-        self.last_update = current_time
+        self.uptime += dt
         
-        # Randomly change driving mode
-        if random.random() < 0.05:  # 5% chance per update
-            self.mode = random.choice(["idle", "accelerating", "cruising", "braking"])
-            print(f"[SIMULATOR] {self.vehicle_id} mode changed to: {self.mode}")
+        # Change driving mode randomly
+        self.mode_duration += dt
+        if self.mode_duration > random.uniform(5, 15):
+            self.mode_duration = 0
+            self.mode = random.choice(["idle", "accelerating", "cruising", "braking", "cruising"])
+            
+            if self.mode == "accelerating":
+                self.target_speed = min(self.speed + random.uniform(20, 60), 120)
+            elif self.mode == "cruising":
+                self.target_speed = self.speed
+            elif self.mode == "braking":
+                self.target_speed = max(0, self.speed - random.uniform(20, 40))
+            elif self.mode == "idle":
+                self.target_speed = 0
         
-        # Update based on mode
-        if self.mode == "idle":
-            self.throttle_pct = max(0, self.throttle_pct - 5)
-            self.brake_pct = 0
-            self.speed = max(0, self.speed - 2)
-            self.rpm = 800 + int(self.speed * 10)
-            
-        elif self.mode == "accelerating":
-            self.throttle_pct = min(100, self.throttle_pct + 10)
-            self.brake_pct = 0
-            self.speed = min(120, self.speed + 3)
-            self.rpm = 800 + int(self.speed * 50)
-            
-        elif self.mode == "cruising":
-            self.throttle_pct = 40 + random.uniform(-5, 5)
-            self.brake_pct = 0
-            target_speed = 80
-            if self.speed < target_speed:
-                self.speed += 1
-            elif self.speed > target_speed:
-                self.speed -= 1
-            self.rpm = 2000 + int(self.speed * 20)
-            
+        # Update speed based on mode
+        if self.mode == "accelerating":
+            self.throttle = min(100, self.throttle + random.uniform(5, 15))
+            self.brake = 0
+            self.speed += random.uniform(1, 3)
+            if self.speed >= self.target_speed:
+                self.mode = "cruising"
         elif self.mode == "braking":
-            self.throttle_pct = 0
-            self.brake_pct = min(100, self.brake_pct + 15)
-            self.speed = max(0, self.speed - 5)
-            self.rpm = 800 + int(self.speed * 10)
+            self.throttle = 0
+            self.brake = min(100, self.brake + random.uniform(10, 30))
+            self.speed = max(0, self.speed - random.uniform(2, 5))
+            if self.speed <= self.target_speed:
+                self.mode = "idle" if self.target_speed == 0 else "cruising"
+        elif self.mode == "cruising":
+            self.throttle = 20 + random.uniform(-5, 5)
+            self.brake = 0
+            self.speed += random.uniform(-1, 1)
+            self.speed = max(30, min(120, self.speed))
+        else:  # idle
+            self.throttle = 0
+            self.brake = 0
+            self.speed = max(0, self.speed - random.uniform(0.5, 1.5))
         
-        # Engine temperature increases with speed and load
-        target_temp = 70 + (self.speed / 120) * 30 + (self.throttle_pct / 100) * 20
-        if self.engine_temp < target_temp:
-            self.engine_temp += 0.5
+        # Constrain speed
+        self.speed = max(0, min(180, self.speed))
+        
+        # Update RPM based on speed and throttle
+        if self.speed < 1:
+            self.rpm = 800 + random.uniform(-50, 50)  # Idle
         else:
-            self.engine_temp -= 0.3
+            base_rpm = (self.speed * 50) + (self.throttle * 20)
+            self.rpm = max(800, min(6000, base_rpm + random.uniform(-100, 100)))
         
-        # Fuel consumption based on throttle
-        self.fuel_level = max(0, self.fuel_level - (self.throttle_pct / 100) * 0.01)
+        # Update gear based on RPM and speed
+        if self.speed < 20:
+            self.gear = 1
+        elif self.speed < 40:
+            self.gear = 2
+        elif self.speed < 60:
+            self.gear = 3
+        elif self.speed < 90:
+            self.gear = 4
+        else:
+            self.gear = 5
         
-        # GPS drifts slightly
-        self.gps_lat += random.uniform(-0.0001, 0.0001)
-        self.gps_lon += random.uniform(-0.0001, 0.0001)
+        # Engine temperature rises when driving, cools when idle
+        if self.speed > 50:
+            self.engine_temp = min(95, self.engine_temp + random.uniform(0.1, 0.3))
+        elif self.speed > 20:
+            self.engine_temp = min(90, self.engine_temp + random.uniform(0.05, 0.15))
+        else:
+            self.engine_temp = max(70, self.engine_temp - random.uniform(0.05, 0.1))
+        
+        # Fuel consumption
+        fuel_consumption = (self.throttle / 100) * 0.002 + 0.0001
+        self.fuel_level = max(10, self.fuel_level - fuel_consumption)
+        
+        # Battery voltage varies slightly
+        self.battery_voltage = 12.4 + random.uniform(-0.1, 0.2)
+        
+        # GPS updates (simulate movement)
+        if self.speed > 0:
+            # Move roughly in a direction
+            self.gps_lat += random.uniform(-0.0001, 0.0001) * (self.speed / 100)
+            self.gps_lon += random.uniform(-0.0001, 0.0001) * (self.speed / 100)
+            self.odometer += self.speed / 3600  # km
         
         # Ambient conditions vary slowly
         self.ambient_temp += random.uniform(-0.1, 0.1)
-        self.humidity += random.uniform(-0.5, 0.5)
-        self.humidity = max(20, min(80, self.humidity))
-
-    def get_telemetry(self) -> dict:
+        self.ambient_temp = max(20, min(40, self.ambient_temp))
+        self.humidity += random.uniform(-0.2, 0.2)
+        self.humidity = max(40, min(90, self.humidity))
+        
+        # System usage
+        self.cpu_usage = 15 + (self.speed / 10) + random.uniform(-5, 5)
+        self.cpu_usage = max(5, min(80, self.cpu_usage))
+        self.memory_usage = 45 + random.uniform(-2, 2)
+        self.memory_usage = max(30, min(75, self.memory_usage))
+    
+    def get_telemetry(self) -> Dict[str, Any]:
         """Get current telemetry snapshot"""
-        uptime = int(time.time() - self.uptime_start)
+        # Calculate wheel speeds (with slight variations)
+        base_wheel_speed = self.speed * 1.1
         
         return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.utcnow().isoformat(),
             "speed": round(self.speed, 1),
             "rpm": int(self.rpm),
             "engine_temp": round(self.engine_temp, 1),
-            "battery_voltage": round(self.battery_voltage + random.uniform(-0.1, 0.1), 2),
+            "battery_voltage": round(self.battery_voltage, 2),
             "fuel_level": round(self.fuel_level, 1),
-            "throttle_pct": round(self.throttle_pct, 1),
-            "brake_pct": round(self.brake_pct, 1),
+            "throttle_pct": round(self.throttle, 1),
+            "brake_pct": round(self.brake, 1),
             "gear": self.gear,
-            "traction_control": self.brake_pct > 50,
-            "cpu_usage": round(random.uniform(10, 30), 1),
-            "memory_usage": round(random.uniform(40, 60), 1),
-            "latency_ms": round(random.uniform(5, 25), 1),
-            "uptime_seconds": uptime,
+            "traction_control": self.speed > 80 or self.brake > 50,
+            "cpu_usage": round(self.cpu_usage, 1),
+            "memory_usage": round(self.memory_usage, 1),
+            "latency_ms": round(random.uniform(20, 50), 1),
+            "uptime_seconds": int(self.uptime),
             "ambient_temp": round(self.ambient_temp, 1),
             "humidity": round(self.humidity, 1),
             "gps_lat": round(self.gps_lat, 6),
             "gps_lon": round(self.gps_lon, 6),
-            "wheel_speed_fl": round(self.speed + random.uniform(-0.5, 0.5), 1),
-            "wheel_speed_fr": round(self.speed + random.uniform(-0.5, 0.5), 1),
-            "wheel_speed_rl": round(self.speed + random.uniform(-0.5, 0.5), 1),
-            "wheel_speed_rr": round(self.speed + random.uniform(-0.5, 0.5), 1),
-            "diagnostics": []
+            "wheel_speed_fl": round(base_wheel_speed + random.uniform(-1, 1), 1),
+            "wheel_speed_fr": round(base_wheel_speed + random.uniform(-1, 1), 1),
+            "wheel_speed_rl": round(base_wheel_speed + random.uniform(-1, 1), 1),
+            "wheel_speed_rr": round(base_wheel_speed + random.uniform(-1, 1), 1),
+            "diagnostics": self._get_diagnostics()
         }
-
-# Global simulator instances
-simulators: Dict[str, VehicleSimulator] = {}
-
-def get_or_create_simulator(vehicle_id: str) -> VehicleSimulator:
-    """Get existing simulator or create new one"""
-    if vehicle_id not in simulators:
-        simulators[vehicle_id] = VehicleSimulator(vehicle_id)
-        print(f"[SIMULATOR] Created simulator for {vehicle_id}. Total simulators: {len(simulators)}")
-    return simulators[vehicle_id]
+    
+    def _get_diagnostics(self) -> List[str]:
+        """Generate realistic diagnostic codes"""
+        codes = []
+        if self.engine_temp > 92:
+            codes.append("P0217: Engine Coolant Over Temperature")
+        if self.fuel_level < 15:
+            codes.append("P0462: Fuel Level Sensor Low")
+        if self.battery_voltage < 12.2:
+            codes.append("P0562: System Voltage Low")
+        return codes
 
 # ==================== STORAGE ====================
 class DataStore:
     def __init__(self):
+        # Initialize vehicle simulators
+        self.simulators = {}
         self.data = {
             "users": {
                 "admin@hybrid-drive.io": {
@@ -243,6 +301,10 @@ class DataStore:
             "telemetry": {}
         }
         self.load_from_file()
+        
+        # Create simulators for each vehicle
+        for vehicle_id in self.data["vehicles"].keys():
+            self.simulators[vehicle_id] = VehicleSimulator(vehicle_id)
 
     def load_from_file(self):
         if DATA_FILE.exists():
@@ -260,10 +322,41 @@ class DataStore:
         return self.data["users"].get(email)
 
     def get_vehicles(self) -> Dict[str, Any]:
+        # Update all vehicle statuses based on simulator activity
+        for vehicle_id in self.data["vehicles"]:
+            # If simulator exists and has been running, vehicle is online
+            if vehicle_id in self.simulators and self.simulators[vehicle_id].uptime > 0:
+                self.data["vehicles"][vehicle_id]["status"] = "connected"
+                self.data["vehicles"][vehicle_id]["last_updated"] = datetime.utcnow().isoformat()
+            else:
+                # Check telemetry history
+                telemetry_list = self.data["telemetry"].get(vehicle_id, [])
+                if telemetry_list:
+                    last_update = datetime.fromisoformat(telemetry_list[-1]["timestamp"])
+                    time_diff = (datetime.utcnow() - last_update).total_seconds()
+                    self.data["vehicles"][vehicle_id]["status"] = "connected" if time_diff < 60 else "offline"
+                    self.data["vehicles"][vehicle_id]["last_updated"] = telemetry_list[-1]["timestamp"]
+                else:
+                    # Initialize simulator to mark as online
+                    if vehicle_id not in self.simulators:
+                        self.simulators[vehicle_id] = VehicleSimulator(vehicle_id)
+                    self.data["vehicles"][vehicle_id]["status"] = "connected"
+                    self.data["vehicles"][vehicle_id]["last_updated"] = datetime.utcnow().isoformat()
         return self.data["vehicles"]
 
     def get_vehicle(self, vehicle_id: str):
-        return self.data["vehicles"].get(vehicle_id)
+        vehicle = self.data["vehicles"].get(vehicle_id)
+        if vehicle:
+            # Update status based on last telemetry
+            telemetry_list = self.data["telemetry"].get(vehicle_id, [])
+            if telemetry_list:
+                last_update = datetime.fromisoformat(telemetry_list[-1]["timestamp"])
+                time_diff = (datetime.utcnow() - last_update).total_seconds()
+                vehicle["status"] = "connected" if time_diff < 60 else "offline"
+                vehicle["last_updated"] = telemetry_list[-1]["timestamp"]
+            else:
+                vehicle["status"] = "offline"
+        return vehicle
 
     def add_telemetry(self, vehicle_id: str, telemetry: TelemetryData):
         if vehicle_id not in self.data["telemetry"]:
@@ -282,6 +375,27 @@ class DataStore:
     def get_telemetry(self, vehicle_id: str, limit: int = 100) -> List[Dict]:
         telemetry_list = self.data["telemetry"].get(vehicle_id, [])
         return telemetry_list[-limit:]
+    
+    def get_current_simulated_telemetry(self, vehicle_id: str) -> Dict:
+        """Get current telemetry from simulator"""
+        if vehicle_id not in self.simulators:
+            self.simulators[vehicle_id] = VehicleSimulator(vehicle_id)
+        
+        # Update simulator
+        self.simulators[vehicle_id].update()
+        telemetry = self.simulators[vehicle_id].get_telemetry()
+        
+        # Store in telemetry history
+        if vehicle_id not in self.data["telemetry"]:
+            self.data["telemetry"][vehicle_id] = []
+        
+        self.data["telemetry"][vehicle_id].append(telemetry)
+        
+        # Keep only last 1000 entries
+        if len(self.data["telemetry"][vehicle_id]) > 1000:
+            self.data["telemetry"][vehicle_id] = self.data["telemetry"][vehicle_id][-1000:]
+        
+        return telemetry
 
     def get_telemetry_history(self, vehicle_id: str, start_date: str, end_date: str) -> List[Dict]:
         telemetry_list = self.data["telemetry"].get(vehicle_id, [])
@@ -317,7 +431,18 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def verify_token(token: str) -> dict:
+def verify_token(authorization: str = None) -> dict:
+    """Verify JWT token from Authorization header"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+    
+    # Extract token from "Bearer <token>" format
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid authorization header format")
+    
+    token = parts[1]
+    
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
@@ -351,16 +476,16 @@ async def verify(token: str):
 
 # ==================== VEHICLE ROUTES ====================
 @app.get("/api/v1/vehicles")
-async def get_vehicles(token: str = ""):
-    if token:
-        verify_token(token)
+async def get_vehicles(authorization: str = Header(None)):
+    if authorization:
+        verify_token(authorization)
     vehicles = list(store.get_vehicles().values())
     return {"vehicles": vehicles}
 
 @app.get("/api/v1/vehicles/{vehicle_id}")
-async def get_vehicle(vehicle_id: str, token: str = ""):
-    if token:
-        verify_token(token)
+async def get_vehicle(vehicle_id: str, authorization: str = Header(None)):
+    if authorization:
+        verify_token(authorization)
     vehicle = store.get_vehicle(vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -368,23 +493,12 @@ async def get_vehicle(vehicle_id: str, token: str = ""):
 
 # ==================== TELEMETRY ROUTES ====================
 @app.get("/api/v1/telemetry/{vehicle_id}/current")
-async def get_current_telemetry(vehicle_id: str, token: str = ""):
-    """Get current simulated telemetry for a vehicle"""
-    if token:
-        verify_token(token)
+async def get_current_telemetry(vehicle_id: str, authorization: str = Header(None)):
+    if authorization:
+        verify_token(authorization)
     
-    print(f"[API] GET /telemetry/{vehicle_id}/current")
-    
-    # Get or create simulator for this vehicle
-    simulator = get_or_create_simulator(vehicle_id)
-    
-    # Update simulator state
-    simulator.update()
-    
-    # Get telemetry snapshot
-    telemetry = simulator.get_telemetry()
-    
-    print(f"[API] Returning telemetry: speed={telemetry['speed']}, rpm={telemetry['rpm']}, temp={telemetry['engine_temp']}")
+    # Get simulated telemetry (realistic and gradual)
+    telemetry = store.get_current_simulated_telemetry(vehicle_id)
     
     return {
         "vehicle_id": vehicle_id,
@@ -397,17 +511,17 @@ async def get_telemetry_history(
     start_date: str,
     end_date: str,
     limit: int = 100,
-    token: str = ""
+    authorization: str = Header(None)
 ):
-    if token:
-        verify_token(token)
+    if authorization:
+        verify_token(authorization)
     telemetry = store.get_telemetry_history(vehicle_id, start_date, end_date)
     return {"telemetry": telemetry[-limit:]}
 
 @app.post("/api/v1/telemetry/{vehicle_id}/report")
-async def report_telemetry(vehicle_id: str, data: TelemetryData, token: str = ""):
-    if token:
-        verify_token(token)
+async def report_telemetry(vehicle_id: str, data: TelemetryData, authorization: str = Header(None)):
+    if authorization:
+        verify_token(authorization)
     result = store.add_telemetry(vehicle_id, data)
     return {"success": True, "data": result}
 
