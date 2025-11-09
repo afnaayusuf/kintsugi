@@ -80,7 +80,17 @@ export function TelemetryCharts() {
 
       // Use real telemetry data from the store (fetched by use-telemetry-connection hook)
       const telemetry = currentTelemetry
-      if (!telemetry) return
+      if (!telemetry) {
+        console.log("[TelemetryCharts] No telemetry data available yet")
+        return
+      }
+      
+      console.log("[TelemetryCharts] Updating chart with telemetry:", {
+        speed: telemetry.telemetry.speed_kph,
+        rpm: telemetry.telemetry.rpm,
+        temp: telemetry.telemetry.engine_temp_c,
+        battery: telemetry.telemetry.battery_voltage
+      })
       
       const now = new Date()
       const time = now.getTime()
@@ -118,7 +128,7 @@ export function TelemetryCharts() {
     updateChart()
     const interval = setInterval(updateChart, 1000)
     return () => clearInterval(interval)
-  }, [selectedVehicleId, isPaused])
+  }, [selectedVehicleId, isPaused, currentTelemetry])
 
   return (
     <div className="space-y-4">
@@ -137,6 +147,18 @@ export function TelemetryCharts() {
           {isPaused ? "Resume" : "Pause"}
         </Button>
       </div>
+
+      {/* Show loading state if no data */}
+      {chartData.length === 0 && (
+        <Card className="border border-border">
+          <CardContent className="pt-6 pb-6 text-center">
+            <div className="text-muted-foreground">
+              Waiting for telemetry data...
+              {!currentTelemetry && <div className="text-xs mt-2">No telemetry received yet</div>}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats cards */}
       <div className="grid grid-cols-3 gap-3">
