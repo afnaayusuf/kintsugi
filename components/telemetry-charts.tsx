@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useVehicleStore } from "@/lib/store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -71,64 +71,55 @@ export function TelemetryCharts() {
     maxSpeed: 0,
     avgTemp: 0,
   })
+  const lastTimestampRef = useRef<string | null>(null)
 
+  // Update chart when telemetry changes
   useEffect(() => {
-    if (!selectedVehicleId) return
+    if (!currentTelemetry || isPaused) return
 
-    const updateChart = () => {
-      if (isPaused) return
+    // Only add new point if timestamp changed (avoid duplicates)
+    if (currentTelemetry.timestamp === lastTimestampRef.current) return
+    lastTimestampRef.current = currentTelemetry.timestamp
 
-      // Use real telemetry data from the store (fetched by use-telemetry-connection hook)
-      const telemetry = currentTelemetry
-      if (!telemetry) {
-        console.log("[TelemetryCharts] No telemetry data available yet")
-        return
-      }
-      
-      console.log("[TelemetryCharts] Updating chart with telemetry:", {
-        speed: telemetry.telemetry.speed_kph,
-        rpm: telemetry.telemetry.rpm,
-        temp: telemetry.telemetry.engine_temp_c,
-        battery: telemetry.telemetry.battery_voltage
-      })
-      
-      const now = new Date()
-      const time = now.getTime()
+    console.log("[TelemetryCharts] Adding new data point:", {
+      speed: currentTelemetry.telemetry.speed_kph,
+      rpm: currentTelemetry.telemetry.rpm,
+      temp: currentTelemetry.telemetry.engine_temp_c,
+      battery: currentTelemetry.telemetry.battery_voltage,
+      throttle: currentTelemetry.telemetry.throttle_pct,
+      brake: currentTelemetry.telemetry.brake_pct,
+    })
 
-      const newPoint: DataPoint = {
-        timestamp: now.toLocaleTimeString(),
-        time,
-        speed: Math.round(telemetry.telemetry.speed_kph * 10) / 10,
-        rpm: Math.round(telemetry.telemetry.rpm / 100) / 10,
-        temp: Math.round(telemetry.telemetry.engine_temp_c * 10) / 10,
-        battery: Math.round(telemetry.telemetry.battery_voltage * 100) / 100,
-        fuel: Math.round(telemetry.telemetry.fuel_level_pct),
-        throttle: Math.round(telemetry.telemetry.throttle_pct),
-        brake: Math.round(telemetry.telemetry.brake_pct),
-      }
-
-      setChartData((prev) => {
-        const updated = [...prev, newPoint]
-        const kept = updated.slice(-60) // Keep last 60 data points (1 minute)
-
-        if (kept.length > 0) {
-          const speeds = kept.map((p) => p.speed)
-          const temps = kept.map((p) => p.temp)
-          setStats({
-            avgSpeed: speeds.reduce((a, b) => a + b, 0) / speeds.length,
-            maxSpeed: Math.max(...speeds),
-            avgTemp: temps.reduce((a, b) => a + b, 0) / temps.length,
-          })
-        }
-
-        return kept
-      })
+    const now = new Date()
+    const newPoint: DataPoint = {
+      timestamp: now.toLocaleTimeString(),
+      time: now.getTime(),
+      speed: Math.round(currentTelemetry.telemetry.speed_kph * 10) / 10,
+      rpm: Math.round(currentTelemetry.telemetry.rpm / 100) / 10,
+      temp: Math.round(currentTelemetry.telemetry.engine_temp_c * 10) / 10,
+      battery: Math.round(currentTelemetry.telemetry.battery_voltage * 100) / 100,
+      fuel: Math.round(currentTelemetry.telemetry.fuel_level_pct),
+      throttle: Math.round(currentTelemetry.telemetry.throttle_pct),
+      brake: Math.round(currentTelemetry.telemetry.brake_pct),
     }
 
-    updateChart()
-    const interval = setInterval(updateChart, 1000)
-    return () => clearInterval(interval)
-  }, [selectedVehicleId, isPaused, currentTelemetry])
+    setChartData((prev) => {
+      const updated = [...prev, newPoint]
+      const kept = updated.slice(-60) // Keep last 60 data points (1 minute)
+
+      if (kept.length > 0) {
+        const speeds = kept.map((p) => p.speed)
+        const temps = kept.map((p) => p.temp)
+        setStats({
+          avgSpeed: speeds.reduce((a, b) => a + b, 0) / speeds.length,
+          maxSpeed: Math.max(...speeds),
+          avgTemp: temps.reduce((a, b) => a + b, 0) / temps.length,
+        })
+      }
+
+      return kept
+    })
+  }, [currentTelemetry, isPaused])
 
   return (
     <div className="space-y-4">
@@ -136,7 +127,9 @@ export function TelemetryCharts() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-foreground">Real-Time Telemetry</h2>
-          <p className="text-sm text-muted-foreground">Live vehicle performance monitoring</p>
+          <p className="text-sm text-muted-foreground">
+            Live vehicle performance monitoring ({chartData.length} data points)
+          </p>
         </div>
         <Button
           variant="outline"
@@ -315,8 +308,8 @@ export function TelemetryCharts() {
                 <YAxis stroke="oklch(0.70 0 0)" fontSize={12} domain={[0, 100]} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ paddingTop: "10px" }} />
-                <Bar dataKey="throttle" fill="oklch(0.65 0.30 240)" name="Throttle (%)" />
-                <Bar dataKey="brake" fill="oklch(0.60 0.24 30)" name="Brake (%)" />
+                <Bar dataKey="throttle" fill="oklch(0.65 0.30 240)" name="Throttle (%)" minPointSize={2} />
+                <Bar dataKey="brake" fill="oklch(0.60 0.24 30)" name="Brake (%)" minPointSize={2} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
