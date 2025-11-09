@@ -543,6 +543,29 @@ async def websocket_endpoint(websocket: WebSocket, vehicle_id: str):
 async def health():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
+@app.get("/debug/simulators")
+async def debug_simulators():
+    """Debug endpoint to check simulator status"""
+    simulator_status = {}
+    for vehicle_id, simulator in simulators.items():
+        simulator_status[vehicle_id] = {
+            "speed": simulator.speed,
+            "rpm": simulator.rpm,
+            "mode": simulator.mode,
+            "uptime": simulator.uptime
+        }
+    
+    telemetry_counts = {}
+    for vehicle_id in store.get_vehicles().keys():
+        telemetry_counts[vehicle_id] = len(store.get_telemetry(vehicle_id, limit=1000))
+    
+    return {
+        "simulators_running": len(simulators),
+        "simulator_status": simulator_status,
+        "telemetry_record_counts": telemetry_counts,
+        "vehicles_in_db": list(store.get_vehicles().keys())
+    }
+
 @app.get("/")
 async def root():
     return {"message": "Vehicle Telemetry Backend API - Running on localhost:8000"}
