@@ -321,15 +321,33 @@ export function TelemetryCharts() {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={240}>
-                <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0 0)" />
                   <XAxis dataKey="timestamp" stroke="oklch(0.70 0 0)" fontSize={12} />
                   <YAxis stroke="oklch(0.70 0 0)" fontSize={12} domain={[0, 100]} />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend wrapperStyle={{ paddingTop: "10px" }} />
-                  <Bar dataKey="throttle" fill="oklch(0.65 0.30 240)" name="Throttle (%)" />
-                  <Bar dataKey="brake" fill="oklch(0.60 0.24 30)" name="Brake (%)" />
-                </ComposedChart>
+                  <Line 
+                    type="monotone" 
+                    dataKey="throttle" 
+                    stroke="oklch(0.65 0.30 240)" 
+                    strokeWidth={2} 
+                    dot={false} 
+                    name="Throttle (%)"
+                    fill="oklch(0.65 0.30 240)"
+                    fillOpacity={0.3}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="brake" 
+                    stroke="oklch(0.60 0.24 30)" 
+                    strokeWidth={2} 
+                    dot={false} 
+                    name="Brake (%)"
+                    fill="oklch(0.60 0.24 30)"
+                    fillOpacity={0.3}
+                  />
+                </LineChart>
               </ResponsiveContainer>
             )}
           </CardContent>
