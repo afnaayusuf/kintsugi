@@ -2,8 +2,9 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { getStoredToken, fetchVehicles } from "@/lib/api"
+import { getStoredToken } from "@/lib/api"
 import { useVehicleStore } from "@/lib/store"
+import { mockVehicles } from "@/lib/mock-data"
 import { useTelemetryConnection } from "@/hooks/use-telemetry-connection"
 import { Sidebar } from "@/components/sidebar"
 import { TopNavigation } from "@/components/top-navigation"
@@ -18,33 +19,46 @@ export default function DashboardPage() {
   const setVehicles = useVehicleStore((state) => state.setVehicles)
   const selectVehicle = useVehicleStore((state) => state.selectVehicle)
   const selectedVehicleId = useVehicleStore((state) => state.selectedVehicleId)
+  const setAuthenticated = useVehicleStore((state) => state.setAuthenticated)
+  const isAuthenticated = useVehicleStore((state) => state.isAuthenticated)
 
   useTelemetryConnection()
 
   useEffect(() => {
     const token = getStoredToken()
+    console.log("[Dashboard] Token check:", token ? "EXISTS" : "MISSING")
+    
     if (!token) {
+      console.log("[Dashboard] ❌ No token, redirecting to login")
       router.push("/login")
       return
     }
 
-    // Fetch vehicles from API
-    const loadVehicles = async () => {
-      try {
-        console.log("Fetching vehicles from API...")
-        const data = await fetchVehicles(token)
-        console.log("Vehicles received:", data)
-        setVehicles(data.vehicles.map((v: any) => ({ id: v.id, model: v.name || v.model, status: v.status })))
-        if (data.vehicles.length > 0 && !selectedVehicleId) {
-          selectVehicle(data.vehicles[0].id)
+    console.log("[Dashboard] ✅ Token exists, setting authenticated = true")
+    setAuthenticated(true)
+
+    // Check if demo mode
+    const isDemo = token.startsWith("demo_")
+    console.log("[Dashboard] Mode:", isDemo ? "🎭 DEMO" : "🌐 REAL API")
+
+    if (!selectedVehicleId) {
+      if (isDemo) {
+        console.log("[Dashboard] Using mock vehicles for demo mode")
+        setVehicles(mockVehicles)
+        if (mockVehicles.length > 0) {
+          selectVehicle(mockVehicles[0].id)
         }
-      } catch (error) {
-        console.error("Failed to fetch vehicles:", error)
+      } else {
+        console.log("[Dashboard] 🔧 TODO: Fetch real vehicles from API")
+        // For now, use BENYON_001 as the real vehicle
+        const realVehicles = [
+          { id: "BENYON_001", model: "RaspberryCar", status: "online" as const }
+        ]
+        setVehicles(realVehicles)
+        selectVehicle("BENYON_001")
       }
     }
-
-    loadVehicles()
-  }, [router, selectedVehicleId, setVehicles, selectVehicle])
+  }, [router, selectedVehicleId, setVehicles, selectVehicle, setAuthenticated])
 
   return (
     <div className="flex h-screen overflow-hidden">
