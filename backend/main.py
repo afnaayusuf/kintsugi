@@ -9,6 +9,9 @@ from pydantic import BaseModel
 import jwt
 from pathlib import Path
 import os
+import random
+import math
+import time
 
 # ==================== CONFIG ====================
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
@@ -65,6 +68,160 @@ class TelemetryData(BaseModel):
 class TelemetryUpdate(BaseModel):
     vehicle_id: str
     data: TelemetryData
+
+# ==================== REALISTIC VEHICLE SIMULATOR ====================
+class VehicleSimulator:
+    """Simulates realistic vehicle telemetry with gradual changes"""
+    
+    def __init__(self, vehicle_id: str):
+        self.vehicle_id = vehicle_id
+        self.speed = 0.0
+        self.rpm = 800
+        self.throttle = 0.0
+        self.brake = 0.0
+        self.gear = 1
+        self.fuel_level = 75.0
+        self.engine_temp = 70.0
+        self.battery_voltage = 12.6
+        
+        base_lat = 10.0053
+        base_lon = 76.3601
+        offset = hash(vehicle_id) % 100 / 10000.0
+        self.gps_lat = base_lat + offset
+        self.gps_lon = base_lon + offset
+        
+        self.ambient_temp = 28.0
+        self.humidity = 65.0
+        self.cpu_usage = 15.0
+        self.memory_usage = 45.0
+        self.uptime = 0
+        
+        self.mode = "idle"
+        self.mode_duration = 0
+        self.target_speed = 0
+        
+    def update(self, dt: float = 1.0):
+        """Update vehicle state with realistic physics"""
+        self.uptime += dt
+        
+        self.mode_duration += dt
+        if self.mode_duration > random.uniform(5, 15):
+            self.mode_duration = 0
+            self.mode = random.choice(["idle", "accelerating", "cruising", "braking", "cruising"])
+            
+            if self.mode == "accelerating":
+                self.target_speed = min(self.speed + random.uniform(20, 60), 120)
+            elif self.mode == "cruising":
+                self.target_speed = self.speed
+            elif self.mode == "braking":
+                self.target_speed = max(0, self.speed - random.uniform(20, 40))
+            elif self.mode == "idle":
+                self.target_speed = 0
+        
+        if self.mode == "accelerating":
+            self.throttle = min(100, self.throttle + random.uniform(5, 15))
+            self.brake = 0
+            self.speed += random.uniform(1, 3)
+            if self.speed >= self.target_speed:
+                self.mode = "cruising"
+        elif self.mode == "braking":
+            self.throttle = 0
+            self.brake = min(100, self.brake + random.uniform(10, 30))
+            self.speed = max(0, self.speed - random.uniform(2, 5))
+            if self.speed <= self.target_speed:
+                self.mode = "idle" if self.target_speed == 0 else "cruising"
+        elif self.mode == "cruising":
+            self.throttle = 20 + random.uniform(-5, 5)
+            self.brake = 0
+            self.speed += random.uniform(-1, 1)
+            self.speed = max(30, min(120, self.speed))
+        else:
+            self.throttle = 0
+            self.brake = 0
+            self.speed = max(0, self.speed - random.uniform(0.5, 1.5))
+        
+        self.speed = max(0, min(180, self.speed))
+        
+        if self.speed < 1:
+            self.rpm = 800 + random.uniform(-50, 50)
+        else:
+            base_rpm = (self.speed * 50) + (self.throttle * 20)
+            self.rpm = max(800, min(6000, base_rpm + random.uniform(-100, 100)))
+        
+        if self.speed < 20:
+            self.gear = 1
+        elif self.speed < 40:
+            self.gear = 2
+        elif self.speed < 60:
+            self.gear = 3
+        elif self.speed < 90:
+            self.gear = 4
+        else:
+            self.gear = 5
+        
+        if self.speed > 50:
+            self.engine_temp = min(95, self.engine_temp + random.uniform(0.1, 0.3))
+        elif self.speed > 20:
+            self.engine_temp = min(90, self.engine_temp + random.uniform(0.05, 0.15))
+        else:
+            self.engine_temp = max(70, self.engine_temp - random.uniform(0.05, 0.1))
+        
+        fuel_consumption = (self.throttle / 100) * 0.002 + 0.0001
+        self.fuel_level = max(10, self.fuel_level - fuel_consumption)
+        
+        self.battery_voltage = 12.4 + random.uniform(-0.1, 0.2)
+        
+        if self.speed > 0:
+            self.gps_lat += random.uniform(-0.0001, 0.0001) * (self.speed / 100)
+            self.gps_lon += random.uniform(-0.0001, 0.0001) * (self.speed / 100)
+        
+        self.ambient_temp += random.uniform(-0.1, 0.1)
+        self.ambient_temp = max(20, min(40, self.ambient_temp))
+        self.humidity += random.uniform(-0.2, 0.2)
+        self.humidity = max(40, min(90, self.humidity))
+        
+        self.cpu_usage = 15 + (self.speed / 10) + random.uniform(-5, 5)
+        self.cpu_usage = max(5, min(80, self.cpu_usage))
+        self.memory_usage = 45 + random.uniform(-2, 2)
+        self.memory_usage = max(30, min(75, self.memory_usage))
+    
+    def get_telemetry(self) -> Dict[str, Any]:
+        """Get current telemetry snapshot"""
+        base_wheel_speed = self.speed * 1.1
+        
+        diagnostics = []
+        if self.engine_temp > 92:
+            diagnostics.append("P0217: Engine Coolant Over Temperature")
+        if self.fuel_level < 15:
+            diagnostics.append("P0462: Fuel Level Sensor Low")
+        if self.battery_voltage < 12.2:
+            diagnostics.append("P0562: System Voltage Low")
+        
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "speed": round(self.speed, 1),
+            "rpm": int(self.rpm),
+            "engine_temp": round(self.engine_temp, 1),
+            "battery_voltage": round(self.battery_voltage, 2),
+            "fuel_level": round(self.fuel_level, 1),
+            "throttle_pct": round(self.throttle, 1),
+            "brake_pct": round(self.brake, 1),
+            "gear": self.gear,
+            "traction_control": self.speed > 80 or self.brake > 50,
+            "cpu_usage": round(self.cpu_usage, 1),
+            "memory_usage": round(self.memory_usage, 1),
+            "latency_ms": round(random.uniform(5, 15), 1),
+            "uptime_seconds": int(self.uptime),
+            "ambient_temp": round(self.ambient_temp, 1),
+            "humidity": round(self.humidity, 1),
+            "gps_lat": round(self.gps_lat, 6),
+            "gps_lon": round(self.gps_lon, 6),
+            "wheel_speed_fl": round(base_wheel_speed + random.uniform(-1, 1), 1),
+            "wheel_speed_fr": round(base_wheel_speed + random.uniform(-1, 1), 1),
+            "wheel_speed_rl": round(base_wheel_speed + random.uniform(-1, 1), 1),
+            "wheel_speed_rr": round(base_wheel_speed + random.uniform(-1, 1), 1),
+            "diagnostics": diagnostics
+        }
 
 # ==================== STORAGE ====================
 class DataStore:
@@ -171,6 +328,8 @@ class DataStore:
 
 # ==================== APP SETUP ====================
 store = DataStore()
+simulators: Dict[str, VehicleSimulator] = {}
+
 app = FastAPI(title="Kintsugi - Vehicle Telemetry Backend", version="1.0.0")
 
 app.add_middleware(
@@ -180,6 +339,37 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==================== BACKGROUND TASK ====================
+async def generate_telemetry():
+    """Background task to continuously generate telemetry data"""
+    print("[SIMULATOR] 🚀 Starting telemetry generation...")
+    
+    # Initialize simulators for all vehicles
+    for vehicle_id in store.get_vehicles().keys():
+        simulators[vehicle_id] = VehicleSimulator(vehicle_id)
+        print(f"[SIMULATOR] ✅ Created simulator for {vehicle_id}")
+    
+    while True:
+        try:
+            for vehicle_id, simulator in simulators.items():
+                simulator.update(1.0)  # Update with 1 second delta
+                telemetry_data = simulator.get_telemetry()
+                
+                # Store telemetry
+                telemetry = TelemetryData(**telemetry_data)
+                store.add_telemetry(vehicle_id, telemetry)
+            
+            await asyncio.sleep(1)  # Update every second
+        except Exception as e:
+            print(f"[SIMULATOR] ❌ Error: {e}")
+            await asyncio.sleep(1)
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks on server startup"""
+    asyncio.create_task(generate_telemetry())
+    print("[SERVER] ✅ Backend started successfully")
 
 # ==================== JWT UTILITIES ====================
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):

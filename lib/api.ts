@@ -8,25 +8,31 @@ export async function apiCall<T>(endpoint: string, options: ApiOptions = {}): Pr
   const { token, ...fetchOptions } = options
   const url = `${API_BASE}${endpoint}`
 
-  console.log(`[API] Calling: ${url}`)
+  console.log(`[API] 🔑 Token present: ${!!token}, Token length: ${token?.length || 0}`)
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...fetchOptions.headers,
+    ...(fetchOptions.headers as Record<string, string>),
   }
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`
+    console.log(`[API] 📤 Sending Authorization header: Bearer ${token.substring(0, 20)}...`)
+  } else {
+    console.log(`[API] ⚠️ No token provided - request will be unauthorized`)
   }
+
+  console.log(`[API] 🔄 Calling: ${url}`)
 
   const response = await fetch(url, {
     ...fetchOptions,
     headers,
   })
 
-  console.log(`[API] Response: ${response.status} ${response.statusText}`)
+  console.log(`[API] 📡 Response: ${response.status} ${response.statusText}`)
 
   if (!response.ok) {
+    console.error(`[API] ❌ Error: ${response.status} ${response.statusText}`)
     throw new Error(`API Error: ${response.status} ${response.statusText}`)
   }
 
