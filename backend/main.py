@@ -365,11 +365,6 @@ class VehicleSimulator:
             "wheel_speed_rr": round(wheel_speed_base + random.uniform(-0.5, 0.5), 1),
             "diagnostics": diagnostics
         }
-            "wheel_speed_fr": round(base_wheel_speed + random.uniform(-1, 1), 1),
-            "wheel_speed_rl": round(base_wheel_speed + random.uniform(-1, 1), 1),
-            "wheel_speed_rr": round(base_wheel_speed + random.uniform(-1, 1), 1),
-            "diagnostics": diagnostics
-        }
 
 # ==================== STORAGE ====================
 class DataStore:
