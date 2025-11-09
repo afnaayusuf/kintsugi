@@ -72,131 +72,273 @@ class TelemetryUpdate(BaseModel):
 
 # ==================== REALISTIC VEHICLE SIMULATOR ====================
 class VehicleSimulator:
-    """Simulates realistic vehicle telemetry with gradual changes"""
+    """Simulates realistic vehicle telemetry with physically accurate correlations"""
     
     def __init__(self, vehicle_id: str):
         self.vehicle_id = vehicle_id
-        self.speed = 0.0
-        self.rpm = 800
-        self.throttle = 0.0
-        self.brake = 0.0
-        self.gear = 1
-        self.fuel_level = 75.0
-        self.engine_temp = 70.0
-        self.battery_voltage = 12.6
         
+        # Motion state
+        self.speed = 0.0  # km/h
+        self.rpm = 0  # RPM - starts at 0 when off
+        self.throttle = 0.0  # 0-100%
+        self.brake = 0.0  # 0-100%
+        self.gear = 0  # 0=Park, 1-6=Drive gears
+        
+        # Engine state
+        self.engine_running = False
+        self.engine_temp = 20.0  # Celsius - starts at ambient
+        self.oil_pressure = 0.0  # PSI
+        self.coolant_temp = 20.0  # Celsius
+        
+        # Fuel & Battery
+        self.fuel_level = random.uniform(40, 90)  # % - start with random fuel
+        self.battery_voltage = 12.6  # Volts
+        
+        # Location (Kochi, India area)
         base_lat = 10.0053
         base_lon = 76.3601
         offset = hash(vehicle_id) % 100 / 10000.0
         self.gps_lat = base_lat + offset
         self.gps_lon = base_lon + offset
+        self.heading = random.uniform(0, 360)  # degrees
         
-        self.ambient_temp = 28.0
-        self.humidity = 65.0
-        self.cpu_usage = 15.0
-        self.memory_usage = 45.0
+        # Environmental
+        self.ambient_temp = random.uniform(25, 35)  # Realistic India temp
+        self.humidity = random.uniform(60, 85)  # Tropical humidity
+        
+        # System metrics
+        self.cpu_usage = 8.0  # % - low when idle
+        self.memory_usage = 35.0  # % - baseline usage
         self.uptime = 0
+        self.network_latency = 5.0  # ms - base latency
         
-        self.mode = "idle"
+        # Driving behavior
+        self.mode = "parked"  # parked, idle, accelerating, cruising, braking
         self.mode_duration = 0
         self.target_speed = 0
+        
+        # Tire pressure (PSI)
+        self.tire_pressure_fl = random.uniform(30, 34)
+        self.tire_pressure_fr = random.uniform(30, 34)
+        self.tire_pressure_rl = random.uniform(30, 34)
+        self.tire_pressure_rr = random.uniform(30, 34)
         
     def update(self, dt: float = 1.0):
         """Update vehicle state with realistic physics"""
         self.uptime += dt
         
+        # Mode transitions with realistic delays
         self.mode_duration += dt
-        if self.mode_duration > random.uniform(5, 15):
-            self.mode_duration = 0
-            self.mode = random.choice(["idle", "accelerating", "cruising", "braking", "cruising"])
-            
-            if self.mode == "accelerating":
-                self.target_speed = min(self.speed + random.uniform(20, 60), 120)
-            elif self.mode == "cruising":
-                self.target_speed = self.speed
-            elif self.mode == "braking":
-                self.target_speed = max(0, self.speed - random.uniform(20, 40))
-            elif self.mode == "idle":
-                self.target_speed = 0
         
-        if self.mode == "accelerating":
-            self.throttle = min(100, self.throttle + random.uniform(5, 15))
-            self.brake = 0
-            self.speed += random.uniform(1, 3)
-            if self.speed >= self.target_speed:
+        if self.mode == "parked" and self.mode_duration > 5:
+            # Start engine after 5 seconds
+            self.engine_running = True
+            self.mode = "idle"
+            self.mode_duration = 0
+            self.gear = 0
+            
+        elif self.mode == "idle" and self.mode_duration > random.uniform(3, 8):
+            # Shift to drive and start moving
+            self.mode = "accelerating"
+            self.mode_duration = 0
+            self.gear = 1
+            self.target_speed = random.uniform(30, 80)
+            
+        elif self.mode == "accelerating" and self.speed >= self.target_speed:
+            self.mode = "cruising"
+            self.mode_duration = 0
+            
+        elif self.mode == "cruising" and self.mode_duration > random.uniform(10, 20):
+            # Randomly decide to brake or accelerate more
+            choice = random.choice(["brake", "accelerate"])
+            if choice == "brake":
+                self.mode = "braking"
+                self.target_speed = max(0, self.speed - random.uniform(20, 40))
+            else:
+                self.mode = "accelerating"
+                self.target_speed = min(120, self.speed + random.uniform(10, 30))
+            self.mode_duration = 0
+            
+        elif self.mode == "braking" and self.speed <= self.target_speed + 2:
+            if self.target_speed < 5:
+                self.mode = "idle"
+                self.gear = 0
+            else:
                 self.mode = "cruising"
+            self.mode_duration = 0
+        
+        # Update controls based on mode
+        if self.mode == "parked":
+            self.throttle = 0
+            self.brake = 100
+            self.speed = 0
+            self.rpm = 0
+            self.gear = 0
+            
+        elif self.mode == "idle":
+            self.throttle = 0
+            self.brake = 0
+            self.speed = 0
+            self.rpm = 800 + random.uniform(-30, 30) if self.engine_running else 0
+            self.gear = 0
+            
+        elif self.mode == "accelerating":
+            # Realistic acceleration
+            speed_diff = self.target_speed - self.speed
+            self.throttle = min(100, max(20, speed_diff * 2))
+            self.brake = 0
+            
+            # Acceleration decreases with speed
+            accel = (self.throttle / 100) * (3.5 - (self.speed / 60))
+            self.speed = min(self.target_speed, self.speed + accel * dt)
+            
+        elif self.mode == "cruising":
+            # Maintain speed with small throttle
+            self.throttle = 15 + random.uniform(-3, 3)
+            self.brake = 0
+            self.speed += random.uniform(-0.5, 0.5)
+            
         elif self.mode == "braking":
             self.throttle = 0
-            self.brake = min(100, self.brake + random.uniform(10, 30))
-            self.speed = max(0, self.speed - random.uniform(2, 5))
-            if self.speed <= self.target_speed:
-                self.mode = "idle" if self.target_speed == 0 else "cruising"
-        elif self.mode == "cruising":
-            self.throttle = 20 + random.uniform(-5, 5)
-            self.brake = 0
-            self.speed += random.uniform(-1, 1)
-            self.speed = max(30, min(120, self.speed))
-        else:
-            self.throttle = 0
-            self.brake = 0
-            self.speed = max(0, self.speed - random.uniform(0.5, 1.5))
+            speed_diff = self.speed - self.target_speed
+            self.brake = min(100, max(20, speed_diff * 3))
+            
+            # Deceleration proportional to brake
+            decel = (self.brake / 100) * 5
+            self.speed = max(self.target_speed, self.speed - decel * dt)
         
+        # Constrain speed
         self.speed = max(0, min(180, self.speed))
         
-        if self.speed < 1:
-            self.rpm = 800 + random.uniform(-50, 50)
+        # REALISTIC RPM calculation based on gear and speed
+        if not self.engine_running:
+            self.rpm = 0
+        elif self.speed < 1:
+            self.rpm = 800 + random.uniform(-30, 30)  # Idle RPM
         else:
-            base_rpm = (self.speed * 50) + (self.throttle * 20)
-            self.rpm = max(800, min(6000, base_rpm + random.uniform(-100, 100)))
+            # Gear ratios (speed range per gear at 3000 RPM)
+            gear_ratios = {
+                1: (0, 25),    # 1st gear: 0-25 km/h
+                2: (20, 50),   # 2nd gear: 20-50 km/h
+                3: (45, 80),   # 3rd gear: 45-80 km/h
+                4: (70, 110),  # 4th gear: 70-110 km/h
+                5: (100, 140), # 5th gear: 100-140 km/h
+                6: (120, 180)  # 6th gear: 120+ km/h
+            }
+            
+            # Auto gear selection based on speed and throttle
+            if self.speed < 25 and self.gear != 1:
+                self.gear = 1
+            elif 20 < self.speed < 50 and self.gear != 2:
+                self.gear = 2
+            elif 45 < self.speed < 80 and self.gear != 3:
+                self.gear = 3
+            elif 70 < self.speed < 110 and self.gear != 4:
+                self.gear = 4
+            elif 100 < self.speed < 140 and self.gear != 5:
+                self.gear = 5
+            elif self.speed >= 120:
+                self.gear = 6
+            
+            # Calculate RPM based on current gear and speed
+            if self.gear > 0:
+                gear_min, gear_max = gear_ratios[self.gear]
+                gear_range = gear_max - gear_min
+                speed_in_gear = (self.speed - gear_min) / gear_range
+                
+                # RPM ranges from 1000 (low) to 4500 (high) in each gear
+                base_rpm = 1000 + (speed_in_gear * 3500)
+                # Add throttle influence
+                rpm_boost = (self.throttle / 100) * 500
+                self.rpm = int(max(800, min(6000, base_rpm + rpm_boost + random.uniform(-50, 50))))
         
-        if self.speed < 20:
-            self.gear = 1
-        elif self.speed < 40:
-            self.gear = 2
-        elif self.speed < 60:
-            self.gear = 3
-        elif self.speed < 90:
-            self.gear = 4
+        # Engine temperature - correlates with RPM and speed
+        target_temp = 70 + (self.rpm / 100) + (self.speed / 10)
+        target_temp = min(95, max(60, target_temp))
+        
+        if self.engine_temp < target_temp:
+            self.engine_temp += random.uniform(0.05, 0.2)
         else:
-            self.gear = 5
+            self.engine_temp -= random.uniform(0.02, 0.1)
         
-        if self.speed > 50:
-            self.engine_temp = min(95, self.engine_temp + random.uniform(0.1, 0.3))
-        elif self.speed > 20:
-            self.engine_temp = min(90, self.engine_temp + random.uniform(0.05, 0.15))
+        self.coolant_temp = self.engine_temp - random.uniform(2, 5)
+        
+        # Oil pressure - correlates with RPM
+        if self.engine_running:
+            self.oil_pressure = 20 + (self.rpm / 100) + random.uniform(-2, 2)
+            self.oil_pressure = max(15, min(80, self.oil_pressure))
         else:
-            self.engine_temp = max(70, self.engine_temp - random.uniform(0.05, 0.1))
+            self.oil_pressure = 0
         
-        fuel_consumption = (self.throttle / 100) * 0.002 + 0.0001
-        self.fuel_level = max(10, self.fuel_level - fuel_consumption)
-        
-        self.battery_voltage = 12.4 + random.uniform(-0.1, 0.2)
-        
+        # Fuel consumption - realistic MPG equivalent
         if self.speed > 0:
-            self.gps_lat += random.uniform(-0.0001, 0.0001) * (self.speed / 100)
-            self.gps_lon += random.uniform(-0.0001, 0.0001) * (self.speed / 100)
+            # L/100km consumption based on speed and throttle
+            base_consumption = 0.05  # 5L/100km base
+            throttle_factor = (self.throttle / 100) * 0.08
+            speed_factor = abs(self.speed - 60) / 1000  # Most efficient at 60 km/h
+            
+            consumption_per_second = (base_consumption + throttle_factor + speed_factor) / 3600
+            distance_km = (self.speed / 3600) * dt
+            fuel_used = (consumption_per_second * self.speed) / 100
+            self.fuel_level = max(5, self.fuel_level - fuel_used)
         
-        self.ambient_temp += random.uniform(-0.1, 0.1)
+        # Battery voltage - drops slightly when engine off
+        if self.engine_running:
+            # Alternator charging
+            self.battery_voltage = 13.8 + random.uniform(-0.1, 0.2)
+        else:
+            self.battery_voltage = 12.3 + random.uniform(-0.1, 0.1)
+        
+        # GPS movement - realistic heading and movement
+        if self.speed > 1:
+            # Update heading gradually
+            self.heading += random.uniform(-5, 5)
+            self.heading = self.heading % 360
+            
+            # Move in heading direction
+            distance_deg = (self.speed / 111000) * dt  # 111km per degree
+            self.gps_lat += distance_deg * math.cos(math.radians(self.heading))
+            self.gps_lon += distance_deg * math.sin(math.radians(self.heading))
+        
+        # Environmental changes
+        self.ambient_temp += random.uniform(-0.05, 0.05)
         self.ambient_temp = max(20, min(40, self.ambient_temp))
-        self.humidity += random.uniform(-0.2, 0.2)
-        self.humidity = max(40, min(90, self.humidity))
+        self.humidity += random.uniform(-0.1, 0.1)
+        self.humidity = max(40, min(95, self.humidity))
         
-        self.cpu_usage = 15 + (self.speed / 10) + random.uniform(-5, 5)
-        self.cpu_usage = max(5, min(80, self.cpu_usage))
-        self.memory_usage = 45 + random.uniform(-2, 2)
-        self.memory_usage = max(30, min(75, self.memory_usage))
+        # System metrics correlate with load
+        self.cpu_usage = 8 + (self.speed / 5) + (self.rpm / 200) + random.uniform(-2, 2)
+        self.cpu_usage = max(5, min(85, self.cpu_usage))
+        self.memory_usage = 35 + random.uniform(-1, 1)
+        self.memory_usage = max(30, min(60, self.memory_usage))
+        
+        # Network latency varies slightly
+        self.network_latency = 5 + random.uniform(-2, 5)
+        self.network_latency = max(1, min(50, self.network_latency))
+        
+        # Tire pressure - slow changes
+        self.tire_pressure_fl += random.uniform(-0.01, 0.01)
+        self.tire_pressure_fr += random.uniform(-0.01, 0.01)
+        self.tire_pressure_rl += random.uniform(-0.01, 0.01)
+        self.tire_pressure_rr += random.uniform(-0.01, 0.01)
     
     def get_telemetry(self) -> Dict[str, Any]:
         """Get current telemetry snapshot"""
-        base_wheel_speed = self.speed * 1.1
+        # Wheel speeds correlate with actual speed (with small variance)
+        # Wheels spin slightly faster than vehicle speed
+        wheel_speed_base = self.speed * 1.02
         
         diagnostics = []
         if self.engine_temp > 92:
             diagnostics.append("P0217: Engine Coolant Over Temperature")
         if self.fuel_level < 15:
             diagnostics.append("P0462: Fuel Level Sensor Low")
-        if self.battery_voltage < 12.2:
+        if self.battery_voltage < 12.0:
             diagnostics.append("P0562: System Voltage Low")
+        if self.oil_pressure < 20 and self.engine_running:
+            diagnostics.append("P0524: Oil Pressure Too Low")
+        if any(p < 28 for p in [self.tire_pressure_fl, self.tire_pressure_fr, self.tire_pressure_rl, self.tire_pressure_rr]):
+            diagnostics.append("P0234: Tire Pressure Warning")
         
         return {
             "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -208,16 +350,21 @@ class VehicleSimulator:
             "throttle_pct": round(self.throttle, 1),
             "brake_pct": round(self.brake, 1),
             "gear": self.gear,
-            "traction_control": self.speed > 80 or self.brake > 50,
+            "traction_control": self.speed > 80 and (self.throttle > 70 or self.brake > 50),
             "cpu_usage": round(self.cpu_usage, 1),
             "memory_usage": round(self.memory_usage, 1),
-            "latency_ms": round(random.uniform(5, 15), 1),
+            "latency_ms": round(self.network_latency, 1),
             "uptime_seconds": int(self.uptime),
             "ambient_temp": round(self.ambient_temp, 1),
             "humidity": round(self.humidity, 1),
             "gps_lat": round(self.gps_lat, 6),
             "gps_lon": round(self.gps_lon, 6),
-            "wheel_speed_fl": round(base_wheel_speed + random.uniform(-1, 1), 1),
+            "wheel_speed_fl": round(wheel_speed_base + random.uniform(-0.5, 0.5), 1),
+            "wheel_speed_fr": round(wheel_speed_base + random.uniform(-0.5, 0.5), 1),
+            "wheel_speed_rl": round(wheel_speed_base + random.uniform(-0.5, 0.5), 1),
+            "wheel_speed_rr": round(wheel_speed_base + random.uniform(-0.5, 0.5), 1),
+            "diagnostics": diagnostics
+        }
             "wheel_speed_fr": round(base_wheel_speed + random.uniform(-1, 1), 1),
             "wheel_speed_rl": round(base_wheel_speed + random.uniform(-1, 1), 1),
             "wheel_speed_rr": round(base_wheel_speed + random.uniform(-1, 1), 1),
