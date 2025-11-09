@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { useVehicleStore } from "@/lib/store"
-import { generateMockTelemetry } from "@/lib/mock-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Pause, Play, TrendingDown, TrendingUp } from "lucide-react"
@@ -64,6 +63,7 @@ function CustomTooltip(props: any) {
 
 export function TelemetryCharts() {
   const selectedVehicleId = useVehicleStore((state) => state.selectedVehicleId)
+  const currentTelemetry = useVehicleStore((state) => state.currentTelemetry)
   const [chartData, setChartData] = useState<DataPoint[]>([])
   const [isPaused, setIsPaused] = useState(false)
   const [stats, setStats] = useState({
@@ -78,7 +78,10 @@ export function TelemetryCharts() {
     const updateChart = () => {
       if (isPaused) return
 
-      const telemetry = generateMockTelemetry(selectedVehicleId)
+      // Use real telemetry data from the store (fetched by use-telemetry-connection hook)
+      const telemetry = currentTelemetry
+      if (!telemetry) return
+      
       const now = new Date()
       const time = now.getTime()
 

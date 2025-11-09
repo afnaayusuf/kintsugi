@@ -2,9 +2,8 @@
 
 import type React from "react"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useVehicleStore } from "@/lib/store"
-import { generateMockTelemetry } from "@/lib/mock-data"
 import { Activity, Gauge, Zap, Wifi, AlertCircle, Thermometer } from "lucide-react"
 
 interface MetricDisplayProps {
@@ -51,23 +50,10 @@ function MetricCard({ label, value, unit, icon, status = "normal", trend }: Metr
 export function VehicleBanner() {
   const selectedVehicleId = useVehicleStore((state) => state.selectedVehicleId)
   const currentTelemetry = useVehicleStore((state) => state.currentTelemetry)
-  const setTelemetry = useVehicleStore((state) => state.setTelemetry)
   const [isUpdating, setIsUpdating] = useState(false)
 
-  useEffect(() => {
-    if (!selectedVehicleId) return
-
-    const updateTelemetry = () => {
-      setIsUpdating(true)
-      const data = generateMockTelemetry(selectedVehicleId)
-      setTelemetry(data)
-      setIsUpdating(false)
-    }
-
-    updateTelemetry()
-    const interval = setInterval(updateTelemetry, 1000)
-    return () => clearInterval(interval)
-  }, [selectedVehicleId, setTelemetry])
+  // NOTE: Telemetry data is now fetched by use-telemetry-connection.ts hook
+  // This component just displays the data from the store
 
   if (!currentTelemetry) {
     return (
