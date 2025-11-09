@@ -658,7 +658,10 @@ async def get_current_telemetry(vehicle_id: str, authorization: Optional[str] = 
     if token:
         verify_token(token)
     telemetry = store.get_telemetry(vehicle_id, limit=1)
-    return {"telemetry": telemetry[-1] if telemetry else None}
+    return {
+        "vehicle_id": vehicle_id,
+        "telemetry": telemetry[-1] if telemetry else None
+    }
 
 @app.get("/api/v1/telemetry/{vehicle_id}/history")
 async def get_telemetry_history(
