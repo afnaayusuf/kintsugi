@@ -114,6 +114,13 @@ export function TelemetryCharts() {
       const updated = [...prev, newPoint]
       const kept = updated.slice(-60) // Keep last 60 data points (1 minute)
 
+      console.log("[TelemetryCharts] Chart data updated:", {
+        totalPoints: kept.length,
+        latestPoint: kept[kept.length - 1],
+        throttleValues: kept.slice(-5).map(p => p.throttle),
+        brakeValues: kept.slice(-5).map(p => p.brake)
+      })
+
       if (kept.length > 0) {
         const speeds = kept.map((p) => p.speed)
         const temps = kept.map((p) => p.temp)
@@ -310,6 +317,7 @@ export function TelemetryCharts() {
               {chartData.length > 0 && (
                 <div className="text-xs text-muted-foreground font-normal">
                   Last: T={chartData[chartData.length - 1]?.throttle}% B={chartData[chartData.length - 1]?.brake}%
+                  | Points: {chartData.length}
                 </div>
               )}
             </CardTitle>
@@ -320,35 +328,46 @@ export function TelemetryCharts() {
                 Waiting for data...
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0 0)" />
-                  <XAxis dataKey="timestamp" stroke="oklch(0.70 0 0)" fontSize={12} />
-                  <YAxis stroke="oklch(0.70 0 0)" fontSize={12} domain={[0, 100]} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend wrapperStyle={{ paddingTop: "10px" }} />
-                  <Line 
-                    type="monotone" 
-                    dataKey="throttle" 
-                    stroke="oklch(0.65 0.30 240)" 
-                    strokeWidth={2} 
-                    dot={false} 
-                    name="Throttle (%)"
-                    fill="oklch(0.65 0.30 240)"
-                    fillOpacity={0.3}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="brake" 
-                    stroke="oklch(0.60 0.24 30)" 
-                    strokeWidth={2} 
-                    dot={false} 
-                    name="Brake (%)"
-                    fill="oklch(0.60 0.24 30)"
-                    fillOpacity={0.3}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <div>
+                {/* Debug info */}
+                <div className="text-xs text-muted-foreground mb-2 p-2 bg-secondary/30 rounded">
+                  Chart has {chartData.length} points. Sample data: 
+                  {chartData.slice(-3).map((d, i) => (
+                    <div key={i}>
+                      {d.timestamp}: throttle={d.throttle}, brake={d.brake}
+                    </div>
+                  ))}
+                </div>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0 0)" />
+                    <XAxis dataKey="timestamp" stroke="oklch(0.70 0 0)" fontSize={12} />
+                    <YAxis stroke="oklch(0.70 0 0)" fontSize={12} domain={[0, 100]} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend wrapperStyle={{ paddingTop: "10px" }} />
+                    <Line 
+                      type="monotone" 
+                      dataKey="throttle" 
+                      stroke="oklch(0.65 0.30 240)" 
+                      strokeWidth={2} 
+                      dot={false} 
+                      name="Throttle (%)"
+                      fill="oklch(0.65 0.30 240)"
+                      fillOpacity={0.3}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="brake" 
+                      stroke="oklch(0.60 0.24 30)" 
+                      strokeWidth={2} 
+                      dot={false} 
+                      name="Brake (%)"
+                      fill="oklch(0.60 0.24 30)"
+                      fillOpacity={0.3}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
