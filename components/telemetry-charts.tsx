@@ -334,11 +334,11 @@ export function TelemetryCharts() {
                   Chart has {chartData.length} points. Sample data: 
                   {chartData.slice(-3).map((d, i) => (
                     <div key={i}>
-                      {d.timestamp}: throttle={d.throttle}, brake={d.brake}
+                      {d.timestamp}: throttle={d.throttle}, brake={d.brake}, fuel={d.fuel}
                     </div>
                   ))}
                 </div>
-                <ResponsiveContainer width="100%" height={200}>
+                <ResponsiveContainer width="100%" height={200} key={chartData.length}>
                   <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0 0)" />
                     <XAxis dataKey="timestamp" stroke="oklch(0.70 0 0)" fontSize={12} />
@@ -348,22 +348,20 @@ export function TelemetryCharts() {
                     <Line 
                       type="monotone" 
                       dataKey="throttle" 
-                      stroke="oklch(0.65 0.30 240)" 
-                      strokeWidth={2} 
-                      dot={false} 
+                      stroke="#4169E1" 
+                      strokeWidth={3} 
+                      dot={true} 
                       name="Throttle (%)"
-                      fill="oklch(0.65 0.30 240)"
-                      fillOpacity={0.3}
+                      isAnimationActive={false}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="brake" 
-                      stroke="oklch(0.60 0.24 30)" 
-                      strokeWidth={2} 
-                      dot={false} 
+                      stroke="#FF4500" 
+                      strokeWidth={3} 
+                      dot={true} 
                       name="Brake (%)"
-                      fill="oklch(0.60 0.24 30)"
-                      fillOpacity={0.3}
+                      isAnimationActive={false}
                     />
                   </LineChart>
                 </ResponsiveContainer>
